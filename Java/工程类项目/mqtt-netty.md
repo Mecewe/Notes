@@ -1,0 +1,26 @@
+```sequence
+MqttConnectHandler -> MqttConnectHandler: 当接受到connect消息时
+MqttConnectHandler -> MqttConnectHandler:为pipeline添加MqttDisallowSecondConnect(请查看协议 MQTT-3.1.0-2)
+MqttConnectHandler -> MqttConnectHandler:验证clientid长度是否符合配置,否则发送ConnAck(REFUSED_IDENTIFIER_REJECTED)到client端
+MqttConnectHandler -> MqttConnectHandler:删除IdleStateHandler和NoConnectIdleEventHandler(连接建立后,必须在用户配置时间内发送connect消息)
+MqttConnectHandler --> PluginOnAuthenticationCallbackHandler:触发PluginOnAuthentication事件,让其调用callback进行认证
+PluginOnAuthenticationCallbackHandler --> PluginOnAuthenticationCallbackHandler:异步遍历所有OnAuthenticationCallback让其认证,每一个callback认证完成会触发一个PluginOnAuthenticationCallbackCompleted事件
+PluginOnAuthenticationCallbackHandler --> PluginOnAuthenticationCallbackHandler:接收到PluginOnAuthenticationCallbackCompleted,根据用户的插件认证配置决定下一步处理
+PluginOnAuthenticationCallbackHandler --> MqttConnectHandler:当认证完成后会触发PluginOnAuthenticationCompleted
+MqttConnectHandler -> MqttConnectHandler:根据client端是否存在LWT,做LWT处理(此处不做过多描述,主要目的是描述流程)
+MqttConnectHandler -> MqttConnectHandler:为pipeline添加:PluginAfterLoginCallbackHandler,做认证完成回调处理
+MqttConnectHandler --> PluginAfterLoginCallbackHandler:触发PluginAfterLogin事件,让其调用callback进行认证完成结果的通知
+MqttConnectHandler -> MqttConnectHandler:若认证不通过则发送ConAck(OnAuthenticationCallback返回的return code)到客户端
+MqttConnectHandler -> MqttConnectHandler:添加PluginRestrictionsCallbackHandler,为客户端进行授权。
+MqttConnectHandler --> PluginRestrictionsCallbackHandler:触发PluginRestrictionsAfterLogin事件,让其遍历调用RestrictionsAfterLoginCallback,让每个callback对客户端进行授权
+PluginRestrictionsCallbackHandler --> MqttConnectHandler:当每个授权都完成后,触发PluginRestrictionsAfterLoginCompleted,将授权信息进行回传
+MqttConnectHandler --> MqttConnectHandler:为pipeline添加:PluginOnConnectCallbackHandler,让其遍历所有callback进行连接通知
+PluginOnConnectCallbackHandler --> MqttConnectHandler:当所有OnConnectCallback回调完成,触发PluginOnConnectCompleted事件
+MqttConnectHandler -> MqttConnectHandler:处理掉与当前clientid一样的连接
+MqttConnectHandler -> ChannelPersistence:保存连接
+MqttConnectHandler -> MqttConnectHandler:添加closeFuture,处理客户端断线
+MqttConnectHandler --> MqttConnectPersistenceHandler:若客户端持久session,则触发持久session事件,让MqttConnectPersistenceHandler处理持久session处理
+MqttConnectHandler --> MqttConnectHandler:采集(统计)当前在线连接数增加
+MqttConnectHandler --> MqttConnectHandler:添加closeFuture,采集(统计)当前在线连接数减少
+```
+
